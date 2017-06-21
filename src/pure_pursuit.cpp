@@ -4,6 +4,7 @@
 
 #include <string>
 #include <cmath>
+#include <algorithm>
 
 #include <ros/ros.h>
 #include <tf2_ros/transform_listener.h>
@@ -17,8 +18,6 @@
 #include <nav_msgs/Odometry.h>
 
 #include <kdl/frames.hpp>
-
-#define min( a, b ) ( (a < b) ? a : b)
 
 // TODO: Figure out how to use tf2 DataConversions
 // for more elegant and compact code
@@ -167,7 +166,7 @@ void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
 
       // Compute the angular velocity.
       // Lateral error is the y-value of the lookahead point (in base_link frame)
-      cmd_vel_.angular.z = min( 2*v_ / (ld_*ld_) * lookahead_.transform.translation.y, w_max_);
+      cmd_vel_.angular.z = std::min( 2*v_ / (ld_*ld_) * lookahead_.transform.translation.y, w_max_);
       
       // Set linear velocity for tracking.
       cmd_vel_.linear.x = v_;

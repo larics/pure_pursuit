@@ -4,6 +4,7 @@
 
 #include <string>
 #include <cmath>
+#include <algorithm>
 
 #include <ros/ros.h>
 #include <tf2_ros/transform_listener.h>
@@ -165,7 +166,7 @@ void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
 
       // Compute the angular velocity.
       // Lateral error is the y-value of the lookahead point (in base_link frame)
-      cmd_vel_.angular.z = 2*v_ / (ld_*ld_) * lookahead_.transform.translation.y;
+      cmd_vel_.angular.z = std::min( 2*v_ / (ld_*ld_) * lookahead_.transform.translation.y, w_max_);
       
       // Set linear velocity for tracking.
       cmd_vel_.linear.x = v_;

@@ -62,6 +62,7 @@ private:
   // Vehicle parameters
   double L_;
   // Algorithm variables
+  // Position tolerace is measured along the x-axis of the robot!
   double ld_, pos_tol_;
   // Generic control variables
   double v_, w_max_;
@@ -70,6 +71,7 @@ private:
   double delta_, delta_vel_, acc_, jerk_, delta_max_;
   nav_msgs::Path path_;
   unsigned idx_;
+  bool goal_reached_;
   geometry_msgs::Twist cmd_vel_;
   ackermann_msgs::AckermannDriveStamped cmd_acker_;
   
@@ -86,7 +88,7 @@ private:
 };
 
 PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.0), idx_(0),
-                             nh_private_("~"), tf_listener_(tf_buffer_),
+                             goal_reached_(true), nh_private_("~"), tf_listener_(tf_buffer_),
                              map_frame_id_("map"), robot_frame_id_("base_link"),
                              lookahead_frame_id_("lookahead")
 {
@@ -156,36 +158,50 @@ void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
 
     if (!path_.poses.empty() && idx_ >= path_.poses.size())
     {
-      // We need to extend the lookahead distance
-      // beyond the goal point.
-      
+      // We are approaching the goal,
+      // which is closer than ld
+
+      // This is the pose of the goal w.r.t. the base_link frame
       KDL::Frame F_bl_end = transformToBaseLink(path_.poses.back().pose, tf.transform);
 
-      // Find the intersection between the circle of radius ld
-      // centered at the robot (origin)
-      // and the line defined by the last path pose
-      double roll, pitch, yaw;
-      F_bl_end.M.GetRPY(roll, pitch, yaw);
-      double k_end = tan(yaw); // Slope of line defined by the last path pose
-      double l_end = F_bl_end.p.y() - k_end * F_bl_end.p.x();
-      double a = 1 + k_end * k_end;
-      double b = 2 * l_end;
-      double c = l_end * l_end - ld_ * ld_;
-      double D = sqrt(b*b - 4*a*c);
-      double x_ld = (-b + copysign(D,v_)) / (2*a);
-      double y_ld = k_end * x_ld + l_end;
+      if (fabs(F_bl_end.p.x()) <= pos_tol_)
+      {
+        // We have reached the goal
+        goal_reached_ = true;
 
-      lookahead_.transform.translation.x = x_ld;
-      lookahead_.transform.translation.y = y_ld;
-      lookahead_.transform.translation.z = F_bl_end.p.z();
-      F_bl_end.M.GetQuaternion(lookahead_.transform.rotation.x,
-                               lookahead_.transform.rotation.y,
-                               lookahead_.transform.rotation.z,
-                               lookahead_.transform.rotation.w);
+        // Reset the path
+        path_ = nav_msgs::Path();
+      }
+      else
+      {
+        // We need to extend the lookahead distance
+        // beyond the goal point.
+      
+        // Find the intersection between the circle of radius ld
+        // centered at the robot (origin)
+        // and the line defined by the last path pose
+        double roll, pitch, yaw;
+        F_bl_end.M.GetRPY(roll, pitch, yaw);
+        double k_end = tan(yaw); // Slope of line defined by the last path pose
+        double l_end = F_bl_end.p.y() - k_end * F_bl_end.p.x();
+        double a = 1 + k_end * k_end;
+        double b = 2 * l_end;
+        double c = l_end * l_end - ld_ * ld_;
+        double D = sqrt(b*b - 4*a*c);
+        double x_ld = (-b + copysign(D,v_)) / (2*a);
+        double y_ld = k_end * x_ld + l_end;
+        
+        lookahead_.transform.translation.x = x_ld;
+        lookahead_.transform.translation.y = y_ld;
+        lookahead_.transform.translation.z = F_bl_end.p.z();
+        F_bl_end.M.GetQuaternion(lookahead_.transform.rotation.x,
+                                 lookahead_.transform.rotation.y,
+                                 lookahead_.transform.rotation.z,
+                                 lookahead_.transform.rotation.w);
+      }
     }
 
-    if (path_.poses.size() > 0 &&
-        distance(path_.poses.back().pose.position, tf.transform.translation) > pos_tol_)
+    if (!goal_reached_)
     {
       // We are tracking.
 
@@ -207,7 +223,9 @@ void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
     }
     else
     {
-      // We have reached the target!
+      // We are at the goal!
+
+      // Stop the vehicle
       
       // The lookahead target is at our current pose.
       lookahead_.transform = geometry_msgs::Transform();
@@ -250,6 +268,15 @@ void PurePursuit::receivePath(nav_msgs::Path new_path)
   {
     path_ = new_path;
     idx_ = 0;
+    if (new_path.poses.size() > 0)
+    {
+      goal_reached_ = false;
+    }
+    else
+    {
+      goal_reached_ = true;
+      ROS_WARN_STREAM("Received empty path!");
+    }
   }
   else
   {

@@ -103,8 +103,11 @@ PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.0), idx_
   nh_private_.param<double>("jerk", jerk_, 100.0);
   nh_private_.param<double>("steering_angle_limit", delta_max_, 1.57);
   nh_private_.param<string>("map_frame_id", map_frame_id_, "map");
+  // Frame attached to midpoint of rear axle (for front-steered vehicles).
   nh_private_.param<string>("robot_frame_id", robot_frame_id_, "base_link");
+  // Lookahead frame moving along the path as the vehicle is moving.
   nh_private_.param<string>("lookahead_frame_id", lookahead_frame_id_, "lookahead");
+  // Frame attached to midpoint of front axle (for front-steered vehicles).
   nh_private_.param<string>("ackermann_frame_id", acker_frame_id_, "rear_axle_midpoint");
 
   // Populate messages with static data

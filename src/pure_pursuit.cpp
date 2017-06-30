@@ -20,6 +20,7 @@
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <ackermann_msgs/AckermannDriveStamped.h>
+#include <std_msgs/Bool.h>
 
 #include <kdl/frames.hpp>
 
@@ -42,6 +43,9 @@ public:
 
   //! Receive path to follow.
   void receivePath(nav_msgs::Path path);
+
+  //! Pause signal
+  void cbPause(std_msgs::Bool pause);
 
   //! Compute transform that transforms a pose into the robot frame (base_link)
   KDL::Frame transformToBaseLink(const geometry_msgs::Pose& pose,
@@ -72,12 +76,13 @@ private:
   nav_msgs::Path path_;
   unsigned idx_;
   bool goal_reached_;
+  bool pause_;
   geometry_msgs::Twist cmd_vel_;
   ackermann_msgs::AckermannDriveStamped cmd_acker_;
   
   // Ros infrastructure
   ros::NodeHandle nh_, nh_private_;
-  ros::Subscriber sub_odom_, sub_path_;
+  ros::Subscriber sub_odom_, sub_path_,sub_pause_;;
   ros::Publisher pub_vel_, pub_acker_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
@@ -88,7 +93,7 @@ private:
 };
 
 PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.0), idx_(0),
-                             goal_reached_(true), nh_private_("~"), tf_listener_(tf_buffer_),
+                             goal_reached_(true), pause_(false), nh_private_("~"), tf_listener_(tf_buffer_),
                              map_frame_id_("map"), robot_frame_id_("base_link"),
                              lookahead_frame_id_("lookahead")
 {
@@ -121,8 +126,28 @@ PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.0), idx_
   
   sub_path_ = nh_.subscribe("path_segment", 1, &PurePursuit::receivePath, this);
   sub_odom_ = nh_.subscribe("odometry", 1, &PurePursuit::computeVelocities, this);
+  sub_pause_ = nh_.subscribe("pause_follower", 1, &PurePursuit::cbPause, this);
   pub_vel_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1);
   pub_acker_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>("cmd_acker", 1);
+}
+
+void PurePursuit::cbPause(std_msgs::Bool pause)
+{
+  //Pause if a signal is received. Before pausing send cmd_vel msg to stop the vehicle
+  if(pause.data)
+  {
+    pause_=true;
+    ROS_INFO_STREAM("Pause");
+    cmd_vel_.linear.x = 0.0;
+    cmd_vel_.angular.z = 0.0;
+    pub_vel_.publish(cmd_vel_);
+  }
+  else
+  {
+    pause_=false;
+    ROS_INFO_STREAM("Continue");
+  }
+
 }
 
 void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
@@ -241,14 +266,18 @@ void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
       cmd_acker_.header.stamp = ros::Time::now();
       cmd_acker_.drive.steering_angle = 0.0;
       cmd_acker_.drive.speed = 0.0;
+      
     }
 
     // Publish the lookahead target transform.
     lookahead_.header.stamp = ros::Time::now();
     tf_broadcaster_.sendTransform(lookahead_);
     
-    // Publish the velocities
-    pub_vel_.publish(cmd_vel_);
+    // Publish the velocities if not paused 
+    if (pause_==false) 
+    {
+      pub_vel_.publish(cmd_vel_);
+    }
     
     // Publish ackerman steering setpoints
     pub_acker_.publish(cmd_acker_);

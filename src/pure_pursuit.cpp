@@ -13,10 +13,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/TransformStamped.h>
-#include <geometry_msgs/Pose.h>
-#include <geometry_msgs/Point.h>
 #include <geometry_msgs/Twist.h>
-#include <geometry_msgs/PolygonStamped.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <ackermann_msgs/AckermannDriveStamped.h>
@@ -87,7 +84,7 @@ private:
   
 };
 
-PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.0), idx_(0),
+PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.1), idx_(0),
                              goal_reached_(true), nh_private_("~"), tf_listener_(tf_buffer_),
                              map_frame_id_("map"), robot_frame_id_("base_link"),
                              lookahead_frame_id_("lookahead")
@@ -97,7 +94,7 @@ PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.0), idx_
   nh_private_.param<double>("lookahead_distance", ld_, 1.0);
   nh_private_.param<double>("linear_velocity", v_, 0.1);
   nh_private_.param<double>("max_rotational_velocity", w_max_, 1.0);
-  nh_private_.param<double>("position_tolerance", pos_tol_, 0.0);
+  nh_private_.param<double>("position_tolerance", pos_tol_, 0.1);
   nh_private_.param<double>("steering_angle_velocity", delta_vel_, 100.0);
   nh_private_.param<double>("acceleration", acc_, 100.0);
   nh_private_.param<double>("jerk", jerk_, 100.0);

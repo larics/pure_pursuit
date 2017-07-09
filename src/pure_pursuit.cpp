@@ -25,6 +25,9 @@
 //#include <tf2_kdl/tf2_kdl.h>
 //#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
+#include <dynamic_reconfigure/server.h>
+#include <pure_pursuit/PurePursuitConfig.h>
+
 using std::string;
 
 class PurePursuit
@@ -56,13 +59,16 @@ public:
   
 private:
 
+  //! Dynamic reconfigure callback.
+  void reconfigure(pure_pursuit::PurePursuitConfig &config, uint32_t level);
+  
   // Vehicle parameters
   double L_;
   // Algorithm variables
   // Position tolerace is measured along the x-axis of the robot!
   double ld_, pos_tol_;
   // Generic control variables
-  double v_, w_max_;
+  double v_max_, v_, w_max_;
   // Control variables for Ackermann steering
   // Steering angle is denoted by delta
   double delta_, delta_vel_, acc_, jerk_, delta_max_;
@@ -81,10 +87,13 @@ private:
   tf2_ros::TransformBroadcaster tf_broadcaster_;
   geometry_msgs::TransformStamped lookahead_;
   string map_frame_id_, robot_frame_id_, lookahead_frame_id_, acker_frame_id_;
+
+  dynamic_reconfigure::Server<pure_pursuit::PurePursuitConfig> reconfigure_server_;
+  dynamic_reconfigure::Server<pure_pursuit::PurePursuitConfig>::CallbackType reconfigure_callback_;
   
 };
 
-PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.1), idx_(0),
+PurePursuit::PurePursuit() : ld_(1.0), v_max_(0.1), v_(v_max_), w_max_(1.0), pos_tol_(0.1), idx_(0),
                              goal_reached_(true), nh_private_("~"), tf_listener_(tf_buffer_),
                              map_frame_id_("map"), robot_frame_id_("base_link"),
                              lookahead_frame_id_("lookahead")
@@ -92,7 +101,7 @@ PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.1), idx_
   // Get parameters from the parameter server
   nh_private_.param<double>("wheelbase", L_, 1.0);
   nh_private_.param<double>("lookahead_distance", ld_, 1.0);
-  nh_private_.param<double>("linear_velocity", v_, 0.1);
+  //nh_private_.param<double>("linear_velocity", v_, 0.1);
   nh_private_.param<double>("max_rotational_velocity", w_max_, 1.0);
   nh_private_.param<double>("position_tolerance", pos_tol_, 0.1);
   nh_private_.param<double>("steering_angle_velocity", delta_vel_, 100.0);
@@ -120,6 +129,9 @@ PurePursuit::PurePursuit() : ld_(1.0), v_(0.1), w_max_(1.0), pos_tol_(0.1), idx_
   sub_odom_ = nh_.subscribe("odometry", 1, &PurePursuit::computeVelocities, this);
   pub_vel_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1);
   pub_acker_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>("cmd_acker", 1);
+
+  reconfigure_callback_ = boost::bind(&PurePursuit::reconfigure, this, _1, _2);
+  reconfigure_server_.setCallback(reconfigure_callback_);
 }
 
 void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
@@ -205,11 +217,14 @@ void PurePursuit::computeVelocities(nav_msgs::Odometry odom)
     {
       // We are tracking.
 
-      double yt = lookahead_.transform.translation.y;
-      double ld_2 = ld_ * ld_;
+      // Compute linear velocity.
+      // Right now,this is not very smart :)
+      v_ = copysign(v_max_, v_);
       
       // Compute the angular velocity.
       // Lateral error is the y-value of the lookahead point (in base_link frame)
+      double yt = lookahead_.transform.translation.y;
+      double ld_2 = ld_ * ld_;
       cmd_vel_.angular.z = std::min( 2*v_ / ld_2 * yt, w_max_ );
 
       // Compute desired Ackermann steering angle
@@ -317,6 +332,11 @@ KDL::Frame PurePursuit::transformToBaseLink(const geometry_msgs::Pose& pose,
 void PurePursuit::run()
 {
   ros::spin();
+}
+
+void PurePursuit::reconfigure(pure_pursuit::PurePursuitConfig &config, uint32_t level)
+{
+  v_max_ = config.max_linear_velocity;
 }
 
 int main(int argc, char**argv)

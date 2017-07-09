@@ -12,17 +12,25 @@ find_package(catkin REQUIRED COMPONENTS
   ackermann_msgs
   tf2
   tf2_ros
+  rospy
+  dynamic_reconfigure
 )
 
 find_package(orocos_kdl REQUIRED)
 
+############################
+## dynamic reconfiure api ##
+############################
+generate_dynamic_reconfigure_options(
+  cfg/PurePursuit.cfg
+)
 
 ###################################
 ## catkin specific configuration ##
 ###################################
 
 catkin_package(
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs ackermann_msgs tf2 tf2_ros
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs ackermann_msgs tf2 tf2_ros rospy dynamic_reconfigure
   )
 
 
@@ -37,6 +45,9 @@ add_executable(pure_pursuit src/pure_pursuit.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(pure_pursuit ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES})
 
+## Make sure configure headers are built before any node using them
+add_dependencies(pure_pursuit ${PROJECT_NAME}_gencfg)
+  
 #############
 ## Install ##
 #############
